@@ -42,16 +42,20 @@ And because sometimes the best way to learn how a neural net trains is to build 
 ### Current Goals
 - [x] Build `Tensor` class with autograd
 - [x] Implement `sum()` operation with gradient propagation
-- [ ] Add basic tensor operations: `+`, `-`, `*`, `/`, `**`
+- [x] Add basic tensor operations: `+`, `-`, `*`
+- [x] Handle broadcasting during backprop
+- [x] Enable `.backward()` for composed operations
+- [x] Add `/` and `**` operations
 - [ ] Enable `.backward()` for composed operations
-- [ ] Build simple MLP using only this engine
+- [ ] Add non-scalar `.backward()` with custom gradients
 
-### Near-Future Goals
+### TODO
 - [ ] Add graph visualization for debugging
 - [ ] Make it less ugly (code-wise)
 - [ ] Add more math ops: `exp`, `tanh`, `relu`, `log`
 - [ ] Add more unit tests
 - [ ] Modularize into something semi-usable
+- [ ] Build simple MLP using only this engine
 - [ ] Build a minimal training framework (optimizers, loss, etc.)
 - [ ] Clone PyTorch in 500 lines or less. (lol.)
 
