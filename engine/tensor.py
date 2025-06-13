@@ -29,7 +29,7 @@ class Tensor:
 
     # clears the gradient to zeros. useful before reusing the tensor in a new backward pass
     def zero_grad(self) -> None:
-        self.grad = Tensor(np.zeros_like(self.data))
+        self.grad = Tensor(np.zeros_like(self.data, dtype=np.float64))
 
     # clean string representation similar to that of numpy or pytorch
     def __repr__(self) -> str:
@@ -40,7 +40,7 @@ class Tensor:
 
         if grad is None:
             if self.shape == ():
-                grad = Tensor(1) # if no grad is supplied and the tensor is a scalar, it defaults to 1
+                grad = Tensor(1.0) # if no grad is supplied and the tensor is a scalar, it defaults to 1
             else:
                 raise RuntimeError("grad must be specified for non-0-tensor")
 
@@ -73,4 +73,37 @@ def tensor_sum(t: Tensor) -> Tensor:
         depends_on = []
 
     # constructs the new scalar tensor, carrying the necessary backward metadata
+    return Tensor(data, requires_grad, depends_on)
+
+def add(t1: Tensor, t2: Tensor) -> Tensor:
+    data = t1.data + t2.data
+    requires_grad = t1.requires_grad or t2.requires_grad
+    depends_on: List[Dependency] = []
+
+    # idea: [1,2,3] + [4+e,5,6] = [5+e,7,9]
+    # this basically means we get the same grad back in addition
+    # but this doesnt handle broadcasting properly
+
+    # handling broadcasting
+    def reduce_grad(grad: np.ndarray, shape: tuple) -> np.ndarray:
+        ndims_added = grad.ndim - len(shape)
+        for _ in range(ndims_added): # summing added dims
+            grad = grad.sum(axis=0)
+        # summing across broadcastd (but not added dims)
+        # eg: (2,3) + (1,3) => (2,3) grad(2,3)
+        for i, dim in enumerate(shape):
+            if dim == 1:
+                grad = grad.sum(axis=i, keepdims=True)
+        return grad
+
+    if t1.requires_grad:
+        def grad_fn1(grad: np.ndarray) -> np.ndarray:
+            return reduce_grad(grad, t1.shape)
+        depends_on.append(Dependency(t1, grad_fn1))
+
+    if t2.requires_grad:
+        def grad_fn2(grad: np.ndarray) -> np.ndarray:
+            return reduce_grad(grad, t2.shape)
+        depends_on.append(Dependency(t2, grad_fn2))
+
     return Tensor(data, requires_grad, depends_on)
