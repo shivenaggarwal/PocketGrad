@@ -16,8 +16,17 @@ def ensure_array(arrayable: Arrayable) -> np.ndarray:
     else:
         return np.array(arrayable)
 
+Tensorable = Union['Tensor', float, np.ndarray]
+
+def ensure_tensor(tensorable: Tensorable) -> 'Tensor':
+    if isinstance(tensorable, Tensor):
+        return tensorable
+    else:
+        return Tensor(tensorable)
+
 class Tensor:
-    def __init__(self, data: Arrayable, requires_grad: bool = False, depends_on: List[Dependency] = None) -> None:
+    # def __init__(self, data: Arrayable, requires_grad: bool = False, depends_on: List[Dependency] = None) -> None:
+    def __init__(self, data: Arrayable, requires_grad: bool = False, depends_on: Optional[List[Dependency]] = None) -> None:
         self.data = ensure_array(data)
         self.requires_grad = requires_grad
         self.depends_on = depends_on or []
@@ -35,7 +44,49 @@ class Tensor:
     def __repr__(self) -> str:
         return f"Tensor({self.data}, requires_grad={self.requires_grad})"
 
-    def backward(self, grad: 'Tensor' = None) -> None:
+    def __add__(self, other) -> 'Tensor': # for tensor + other
+      return _add(self, ensure_tensor(other))
+
+    def __radd__(self, other) -> 'Tensor': # for other + tensor
+      return _add(ensure_tensor(other), self)
+
+    # inplace ops
+    def __iadd__(self, other) -> 'Tensor': # for t+=other
+      self.data = self.data + ensure_tensor(other).data
+      # invalidate the gradient to get correct grad later on
+      self.grad = None
+
+      return self
+
+    def __isub__(self, other) -> 'Tensor': # for t-=other
+      self.data = self.data - ensure_tensor(other).data
+      self.grad = None
+
+      return self
+
+    def __imul__(self, other) -> 'Tensor': # for t*= other
+      self.data = self.data * ensure_tensor(other).data
+      self.grad = None
+
+      return self
+
+    def __mul__(self, other) -> 'Tensor':
+      return _mul(self, ensure_tensor(other))
+
+    def __rmul__(self, other) -> 'Tensor':
+      return _mul(ensure_tensor(other), self)
+
+    def __neg__(self) -> 'Tensor':
+      return _neg(self)
+
+    def __sub__(self, other) -> 'Tensor':
+      return _sub(self, ensure_tensor(other))
+
+    def __rsub__(self, other) -> 'Tensor':
+      return _sub(ensure_tensor(other), self)
+
+    # def backward(self, grad: 'Tensor' = None) -> None:
+    def backward(self, grad: Optional['Tensor'] = None) -> None:
         assert self.requires_grad, "called backward on non-requires-grad tensor"
 
         if grad is None:
@@ -44,6 +95,7 @@ class Tensor:
             else:
                 raise RuntimeError("grad must be specified for non-0-tensor")
 
+        assert self.grad is not None
         self.grad.data += grad.data # accumulates the gradient (important for branches in computational graph)
 
         # recursively calls backward() on all dependencies, using their grad_fn to compute appropriate local gradients
@@ -75,7 +127,7 @@ def tensor_sum(t: Tensor) -> Tensor:
     # constructs the new scalar tensor, carrying the necessary backward metadata
     return Tensor(data, requires_grad, depends_on)
 
-def add(t1: Tensor, t2: Tensor) -> Tensor:
+def _add(t1: Tensor, t2: Tensor) -> Tensor:
     data = t1.data + t2.data
     requires_grad = t1.requires_grad or t2.requires_grad
     depends_on: List[Dependency] = []
@@ -108,7 +160,7 @@ def add(t1: Tensor, t2: Tensor) -> Tensor:
 
     return Tensor(data, requires_grad, depends_on)
 
-def mul(t1: Tensor, t2: Tensor) -> Tensor:
+def _mul(t1: Tensor, t2: Tensor) -> Tensor:
   # y = a*b
   # we know: dL/dy
   # dL/da = dL/dy * dy/da = dL/dy * b
@@ -155,7 +207,7 @@ def mul(t1: Tensor, t2: Tensor) -> Tensor:
 
   return Tensor(data, requires_grad, depends_on)
 
-def neg(t: Tensor) -> Tensor:
+def _neg(t: Tensor) -> Tensor:
     data = -t.data
     requires_grad = t.requires_grad
     if requires_grad:
@@ -165,5 +217,5 @@ def neg(t: Tensor) -> Tensor:
 
     return Tensor(data, requires_grad, depends_on)
 
-def sub(t1: Tensor, t2: Tensor) -> Tensor:
-    return add(t1, neg(t2))
+def _sub(t1: Tensor, t2: Tensor) -> Tensor:
+    return t1 + -t2
